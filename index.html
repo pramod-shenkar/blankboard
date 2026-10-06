@@ -4,25 +4,29 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tree Builder (Vertical)</title>
+    <title>BlankBoard</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <style>
         :root {
             --bg: #1e1e1e;
             --panel: #252526;
+            --cell: #2d2d2d;
             --fg: #d4d4d4;
             --muted: #858585;
             --accent: #0e639c;
             --border: #3c3c3c;
             --line: #6a6a6a;
             --danger: #c14a4a;
-
             --pulse: #d4d4d4;
             --pulse-glow: rgba(212, 212, 212, 0.28);
-
             --gap: 90px;
             --space: 28px;
             --del-btn: 22px;
+            --cell-size: 38px;
+            --idx-w: 22px;
+            --idx-h: 18px;
+            --grid-pad: 4px;
+            --grid-gap: 2px;
         }
 
         * {
@@ -31,7 +35,7 @@
 
         body {
             margin: 0;
-            padding: 24px 32px;
+            padding: 24px 32px 60px;
             background: var(--bg);
             color: var(--fg);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -40,10 +44,10 @@
 
         header {
             display: flex;
-            align-items: flex-start;
+            align-items: center;
             justify-content: space-between;
             max-width: 1100px;
-            margin: 0 auto 16px;
+            margin: 0 auto 20px;
             gap: 16px;
         }
 
@@ -51,33 +55,125 @@
             font-size: 16px;
             margin: 0;
             font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 6px;
         }
 
         .toolbar button {
-            padding: 5px 10px;
+            padding: 5px 12px;
             background: transparent;
             border: 1px solid var(--border);
             color: var(--fg);
             border-radius: 4px;
             cursor: pointer;
             font-size: 12px;
+            font-family: inherit;
         }
 
-        .toolbar button:hover {
+        .toolbar button:hover:not(:disabled) {
             border-color: var(--accent);
         }
 
-        .canvas {
+        .workspaces {
             max-width: 1100px;
             margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .canvas {
+            position: relative;
             padding: 24px;
             border: 1px dashed var(--border);
             border-radius: 8px;
             overflow-x: auto;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            min-height: 140px;
         }
 
+        .canvas-controls {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.15s;
+            z-index: 5;
+        }
+
+        .canvas:hover .canvas-controls {
+            opacity: 1;
+        }
+
+        .canvas-controls button {
+            padding: 3px 9px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            color: var(--muted);
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            font-family: inherit;
+            line-height: 1.4;
+            transition: border-color 0.12s, color 0.12s, background 0.12s;
+        }
+
+        .canvas-controls button:hover {
+            color: var(--fg);
+            border-color: var(--line);
+        }
+
+        .canvas-controls button.danger:hover {
+            border-color: var(--danger);
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .canvas-controls .num {
+            width: 34px;
+            padding: 3px 4px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            color: var(--fg);
+            border-radius: 3px;
+            font-family: inherit;
+            font-size: 11px;
+            text-align: center;
+            outline: none;
+        }
+
+        .canvas-controls .num:focus {
+            border-color: var(--accent);
+        }
+
+        .canvas-controls .sep {
+            color: var(--muted);
+            font-size: 11px;
+            font-style: italic;
+        }
+
+        .no-trees {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 60px 24px;
+            text-align: center;
+            color: var(--muted);
+            font-size: 13px;
+            border: 1px dashed var(--border);
+            border-radius: 8px;
+        }
+
+        /* ---------- Tree ---------- */
         .node {
             display: flex;
             flex-direction: column;
@@ -176,7 +272,6 @@
             z-index: 3;
             cursor: default;
             border-radius: 4px;
-            transition: background 0.12s;
         }
 
         .stub-hit.left {
@@ -238,7 +333,6 @@
             font-size: 12px;
             outline: none;
             z-index: 4;
-            cursor: default;
         }
 
         .edge-input.left {
@@ -267,7 +361,6 @@
             z-index: 1;
             cursor: pointer;
             user-select: none;
-            transition: border-color 0.12s;
         }
 
         .card:hover {
@@ -333,26 +426,226 @@
             border-color: var(--danger);
             color: #fff;
         }
+
+        /* ---------- Grid ---------- */
+        .grids {
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+            align-items: center;
+            width: 100%;
+        }
+
+        .grid-wrap {
+            display: flex;
+            flex-direction: row;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .grid-body {
+            display: grid;
+            grid-template-columns: var(--idx-w) auto;
+            grid-template-rows: var(--idx-h) auto;
+        }
+
+        .corner {
+            grid-column: 1;
+            grid-row: 1;
+        }
+
+        .idx-row-top {
+            grid-column: 2;
+            grid-row: 1;
+        }
+
+        .idx-col-left {
+            grid-column: 1;
+            grid-row: 2;
+        }
+
+        .cells {
+            grid-column: 2;
+            grid-row: 2;
+        }
+
+        .idx-row-top {
+            display: grid;
+            gap: var(--grid-gap);
+            padding: 0 var(--grid-pad);
+            align-items: center;
+            justify-items: center;
+        }
+
+        .idx-col-left {
+            display: grid;
+            gap: var(--grid-gap);
+            padding: var(--grid-pad) 0;
+            align-items: center;
+            justify-items: center;
+        }
+
+        .idx {
+            font-family: Georgia, "Times New Roman", serif;
+            font-style: italic;
+            font-size: 10px;
+            color: var(--muted);
+            user-select: none;
+        }
+
+        .cells {
+            display: grid;
+            gap: var(--grid-gap);
+            padding: var(--grid-pad);
+            background: var(--border);
+            border-radius: 6px;
+        }
+
+        .grid-cell {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            background: var(--cell);
+            color: var(--fg);
+            border: none;
+            outline: none;
+            border-radius: 3px;
+            text-align: center;
+            font-family: inherit;
+            font-size: 15px;
+            padding: 0;
+            cursor: default;
+            transition: background 0.1s, box-shadow 0.1s;
+        }
+
+        .grid-cell:hover {
+            background: #333;
+        }
+
+        .grid-cell:focus {
+            background: #3a3a3a;
+            box-shadow: inset 0 0 0 1.5px var(--accent);
+        }
+
+        .grid-controls {
+            display: flex;
+            flex-direction: row;
+            gap: 4px;
+            align-items: flex-start;
+            margin-top: var(--idx-h);
+        }
+
+        .grid-controls button {
+            padding: 3px 8px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            color: var(--muted);
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            font-family: inherit;
+            line-height: 1.4;
+            white-space: nowrap;
+            transition: border-color 0.12s, color 0.12s, background 0.12s;
+        }
+
+        .grid-controls button:hover {
+            color: var(--fg);
+            border-color: var(--line);
+        }
+
+        .grid-controls button.danger:hover {
+            border-color: var(--danger);
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .dim-editor {
+            display: flex;
+            gap: 3px;
+            align-items: center;
+            padding: 2px 5px;
+            background: var(--panel);
+            border: 1px solid var(--accent);
+            border-radius: 3px;
+        }
+
+        .dim-editor input {
+            width: 32px;
+            background: transparent;
+            color: var(--fg);
+            border: none;
+            outline: none;
+            text-align: center;
+            font-family: inherit;
+            font-size: 11px;
+        }
+
+        .dim-editor span {
+            color: var(--muted);
+            font-size: 10px;
+            font-style: italic;
+        }
+
+        .empty-grid {
+            color: var(--muted);
+            font-size: 12px;
+            padding: 20px;
+        }
     </style>
 </head>
 
 <body>
     <div id="app">
         <header>
-            <h1>Tree Builder</h1>
+            <h1>BlankBoard</h1>
             <div class="toolbar">
-                <button @click="reset">Reset</button>
+                <button v-on:click="addGridWorkspace">+ New Grid</button>
+                <button v-on:click="addTreeWorkspace">+ New Tree</button>
             </div>
         </header>
 
-        <div class="canvas">
-            <tree-node :node="state.root" :is-root="true" @add-child="addChild" @remove="removeNode" />
+        <div class="workspaces" v-if="state.workspaces.length">
+            <div class="canvas" v-for="ws in state.workspaces" v-bind:key="ws.uid">
+
+                <div v-if="ws.type === 'tree'" class="canvas-controls">
+                    <button v-on:click="resetTree(ws)">Reset</button>
+                    <button v-on:click="copyTree(ws)">Copy</button>
+                    <button class="danger" v-on:click="deleteWorkspace(ws)">Delete</button>
+                </div>
+
+                <div v-if="ws.type === 'grid'" class="canvas-controls">
+                    <input class="num" type="number" min="1" max="30" v-model.number="ws.m" placeholder="m">
+                    <span class="sep">x</span>
+                    <input class="num" type="number" min="1" max="30" v-model.number="ws.n" placeholder="n">
+                    <button v-on:click="createGrid(ws)">Create</button>
+                    <button v-on:click="copyGridWorkspace(ws)">Copy</button>
+                    <button class="danger" v-on:click="deleteWorkspace(ws)">Delete</button>
+                </div>
+
+                <tree-node v-if="ws.type === 'tree' && ws.root" v-bind:key="ws.treeKey" v-bind:node="ws.root"
+                    v-bind:is-root="true" v-on:add-child="addChild(ws, $event)"
+                    v-on:remove="removeNode(ws, $event)"></tree-node>
+
+                <div v-if="ws.type === 'grid'" class="grids">
+                    <grid-panel v-for="grid in ws.grids" v-bind:key="grid.uid" v-bind:grid="grid"
+                        v-on:remove="removeGrid(ws, grid)" v-on:copy="copyGrid(ws, grid)"></grid-panel>
+                    <div v-if="!ws.grids.length" class="empty-grid">
+                        Set m and n above, then click Create.
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="no-trees" v-if="!state.workspaces.length">
+            Nothing here yet. Click + New Grid or + New Tree to start.
         </div>
     </div>
 
     <script>
-        const { createApp, reactive, ref, watch, onMounted, onBeforeUnmount, nextTick } = Vue;
+        const { createApp, reactive, ref, computed, nextTick, onMounted, onBeforeUnmount, watch } = Vue;
 
+        /* ===================== TreeNode ===================== */
         const TreeNode = {
             name: "TreeNode",
             props: {
@@ -360,7 +653,8 @@
                 isRoot: { type: Boolean, default: false }
             },
             emits: ["add-child", "remove"],
-            setup(props, { emit }) {
+            setup(props, context) {
+                const emit = context.emit;
                 const draft = ref("");
                 const inputEl = ref(null);
                 const cardWrapEl = ref(null);
@@ -378,16 +672,19 @@
 
                 function findChildById(id) {
                     if (id == null) return null;
-                    return props.node.children.find(c => c.id === id) || null;
+                    for (let i = 0; i < props.node.children.length; i++) {
+                        if (props.node.children[i].id === id) return props.node.children[i];
+                    }
+                    return null;
                 }
 
                 function onDocMouseDown(e) {
                     if (editing.value && inputEl.value && e.target !== inputEl.value) {
-                        const ourWrap = cardWrapEl.value;
-                        if (!ourWrap || !ourWrap.contains(e.target)) {
+                        const wrap = cardWrapEl.value;
+                        if (!wrap || !wrap.contains(e.target)) {
                             commit();
                             justCommitted = true;
-                            setTimeout(() => { justCommitted = false; }, 150);
+                            setTimeout(function () { justCommitted = false; }, 150);
                         }
                     }
                     if (edgeEditingId.value && edgeInput.value && e.target !== edgeInput.value) {
@@ -396,24 +693,21 @@
                     }
                 }
 
-                /* Auto-enter edit mode whenever a node's autoEdit flag flips on.
-                   Uses a watcher (not just onMounted) so that replacing the root
-                   on Reset — which doesn't re-mount the component — still triggers it. */
-                watch(
-                    () => props.node.autoEdit,
-                    (val) => {
-                        if (val) {
-                            props.node.autoEdit = false;
-                            nextTick(() => startEdit());
-                        }
-                    },
-                    { immediate: true }
-                );
+                function consumeAutoEdit() {
+                    if (props.node && props.node.autoEdit) {
+                        props.node.autoEdit = false;
+                        nextTick(function () { startEdit(); });
+                    }
+                }
 
-                onMounted(() => {
+                onMounted(function () {
                     document.addEventListener("mousedown", onDocMouseDown, true);
+                    consumeAutoEdit();
                 });
-                onBeforeUnmount(() => {
+                watch(function () { return props.node ? props.node.autoEdit : false; }, function (val) {
+                    if (val) consumeAutoEdit();
+                });
+                onBeforeUnmount(function () {
                     document.removeEventListener("mousedown", onDocMouseDown, true);
                     if (pendingClick) clearTimeout(pendingClick);
                     if (pulseTimer) clearTimeout(pulseTimer);
@@ -429,51 +723,41 @@
                 function startEdit() {
                     draft.value = props.node.value || "";
                     editing.value = true;
-                    nextTick(() => inputEl.value && inputEl.value.focus());
+                    nextTick(function () { if (inputEl.value) inputEl.value.focus(); });
                 }
                 function onBlur() { commit(); }
+                function onInputMouseDown(e) { if (e.detail >= 2) e.preventDefault(); }
 
-                function onInputMouseDown(e) {
-                    if (e.detail >= 2) e.preventDefault();
-                }
-
-                /* SINGLE click → add branch (after a short debounce so double-click can cancel it) */
                 function onCardClick() {
                     if (editing.value) {
                         commit();
                         justCommitted = true;
-                        setTimeout(() => { justCommitted = false; }, 150);
+                        setTimeout(function () { justCommitted = false; }, 150);
                         return;
                     }
                     if (justCommitted) return;
                     if (pendingClick) return;
-                    pendingClick = setTimeout(() => {
+                    pendingClick = setTimeout(function () {
                         pendingClick = null;
                         pulsing.value = true;
                         emit("add-child", props.node.id);
                         clearTimeout(pulseTimer);
-                        pulseTimer = setTimeout(() => { pulsing.value = false; }, 600);
+                        pulseTimer = setTimeout(function () { pulsing.value = false; }, 600);
                     }, 250);
                 }
-
-                /* DOUBLE click → edit */
                 function onCardDblClick(e) {
                     if (e && e.preventDefault) e.preventDefault();
                     if (pendingClick) { clearTimeout(pendingClick); pendingClick = null; }
                     if (editing.value) return;
                     startEdit();
                 }
-
-                function remove(e) {
-                    e.stopPropagation();
-                    emit("remove", props.node.id);
-                }
+                function remove(e) { e.stopPropagation(); emit("remove", props.node.id); }
 
                 function startEdge(child, side) {
                     edgeEditingId.value = child.id;
                     edgeEditingSide.value = side;
                     edgeDraft.value = child.edgeLabel || "";
-                    nextTick(() => edgeInput.value && edgeInput.value.focus());
+                    nextTick(function () { if (edgeInput.value) edgeInput.value.focus(); });
                 }
                 function commitEdge(child) {
                     if (!child || edgeEditingId.value !== child.id) return;
@@ -496,111 +780,280 @@
                 }
 
                 return {
-                    draft, inputEl, cardWrapEl, editing, pulsing,
-                    commit, cancelEdit, startEdit, onBlur, onInputMouseDown,
-                    onCardClick, onCardDblClick, remove,
-                    edgeEditingId, edgeEditingSide, edgeDraft, edgeInput,
-                    startEdge, commitEdge, cancelEdge
+                    draft: draft, inputEl: inputEl, cardWrapEl: cardWrapEl, editing: editing, pulsing: pulsing,
+                    commit: commit, cancelEdit: cancelEdit, startEdit: startEdit, onBlur: onBlur,
+                    onInputMouseDown: onInputMouseDown, onCardClick: onCardClick, onCardDblClick: onCardDblClick,
+                    remove: remove, edgeEditingId: edgeEditingId, edgeEditingSide: edgeEditingSide,
+                    edgeDraft: edgeDraft, edgeInput: edgeInput, startEdge: startEdge, commitEdge: commitEdge,
+                    cancelEdge: cancelEdge
                 };
             },
-            template: `
-        <div class="node" :class="{ 'has-children': node.children.length > 0 }">
-          <div class="card-wrap" ref="cardWrapEl" :class="{ pulsing }">
-            <div
-              class="card"
-              :class="{ filled: node.value !== null }"
-              @click="onCardClick"
-              @dblclick="onCardDblClick"
-            >
-              <input
-                v-if="editing"
-                ref="inputEl"
-                v-model="draft"
-                placeholder="value"
-                @mousedown="onInputMouseDown"
-                @click.stop
-                @keyup.enter="commit"
-                @keyup.esc="cancelEdit"
-                @blur="onBlur"
-              />
-              <span v-else-if="node.value !== null" class="label">{{ node.value }}</span>
-              <span v-else class="placeholder">·</span>
-
-              <button
-                v-if="!isRoot"
-                class="del"
-                @click="remove"
-                @dblclick.stop
-                title="Remove"
-              >✕</button>
-            </div>
-          </div>
-
-          <div class="children" v-if="node.children.length">
-            <div class="child" v-for="child in node.children" :key="child.id">
-
-              <div class="stub-hit left" @click.stop="startEdge(child, 'left')">
-                <span
-                  v-if="child.edgeLabel && child.edgeSide === 'left'"
-                  class="edge-text"
-                >{{ child.edgeLabel }}</span>
-                <span v-else class="edge-hint">+</span>
-              </div>
-
-              <div class="stub-hit right" @click.stop="startEdge(child, 'right')">
-                <span
-                  v-if="child.edgeLabel && child.edgeSide === 'right'"
-                  class="edge-text"
-                >{{ child.edgeLabel }}</span>
-                <span v-else class="edge-hint">+</span>
-              </div>
-
-              <input
-                v-if="edgeEditingId === child.id"
-                ref="edgeInput"
-                class="edge-input"
-                :class="edgeEditingSide"
-                v-model="edgeDraft"
-                placeholder="label"
-                @click.stop
-                @keyup.enter="commitEdge(child)"
-                @keyup.esc="cancelEdge"
-                @blur="commitEdge(child)"
-              />
-
-              <tree-node
-                :node="child"
-                @add-child="$emit('add-child', $event)"
-                @remove="$emit('remove', $event)"
-              />
-            </div>
-          </div>
-        </div>
-      `
+            template:
+                '<div class="node" v-bind:class="{ \'has-children\': node.children.length > 0 }">' +
+                '<div class="card-wrap" ref="cardWrapEl" v-bind:class="{ pulsing: pulsing }">' +
+                '<div class="card" v-bind:class="{ filled: node.value !== null }" v-on:click="onCardClick" v-on:dblclick="onCardDblClick">' +
+                '<input v-if="editing" ref="inputEl" v-model="draft" placeholder="value" v-on:mousedown="onInputMouseDown" v-on:click.stop v-on:keyup.enter="commit" v-on:keyup.esc="cancelEdit" v-on:blur="onBlur">' +
+                '<span v-if="!editing && node.value !== null" class="label">{{ node.value }}</span>' +
+                '<span v-if="!editing && node.value === null" class="placeholder">.</span>' +
+                '<button v-if="!isRoot" class="del" v-on:click="remove" v-on:dblclick.stop title="Remove">x</button>' +
+                '</div>' +
+                '</div>' +
+                '<div class="children" v-if="node.children.length">' +
+                '<div class="child" v-for="child in node.children" v-bind:key="child.id">' +
+                '<div class="stub-hit left" v-on:click.stop="startEdge(child, \'left\')">' +
+                '<span v-if="child.edgeLabel && child.edgeSide === \'left\'" class="edge-text">{{ child.edgeLabel }}</span>' +
+                '<span v-if="!(child.edgeLabel && child.edgeSide === \'left\')" class="edge-hint">+</span>' +
+                '</div>' +
+                '<div class="stub-hit right" v-on:click.stop="startEdge(child, \'right\')">' +
+                '<span v-if="child.edgeLabel && child.edgeSide === \'right\'" class="edge-text">{{ child.edgeLabel }}</span>' +
+                '<span v-if="!(child.edgeLabel && child.edgeSide === \'right\')" class="edge-hint">+</span>' +
+                '</div>' +
+                '<input v-if="edgeEditingId === child.id" ref="edgeInput" class="edge-input" v-bind:class="edgeEditingSide" v-model="edgeDraft" placeholder="label" v-on:click.stop v-on:keyup.enter="commitEdge(child)" v-on:keyup.esc="cancelEdge" v-on:blur="commitEdge(child)">' +
+                '<tree-node v-bind:node="child" v-on:add-child="function (id) { $emit(\'add-child\', id); }" v-on:remove="function (id) { $emit(\'remove\', id); }"></tree-node>' +
+                '</div>' +
+                '</div>' +
+                '</div>'
         };
 
-        const app = createApp({
-            components: { TreeNode },
-            setup() {
-                let nextId = 2;
-                const state = reactive({
-                    root: { id: 1, value: null, children: [], autoEdit: true }
+        /* ===================== GridPanel ===================== */
+        const GridPanel = {
+            name: "GridPanel",
+            props: { grid: { type: Object, required: true } },
+            emits: ["remove", "copy"],
+            setup(props, context) {
+                const emit = context.emit;
+                const editingDims = ref(false);
+                const dimRows = ref(props.grid.rows);
+                const dimCols = ref(props.grid.cols);
+                const dimInput = ref(null);
+
+                const colIdxStyle = computed(function () {
+                    return {
+                        gridTemplateColumns: "repeat(" + props.grid.cols + ", var(--cell-size))"
+                    };
+                });
+                const rowIdxStyle = computed(function () {
+                    return {
+                        gridTemplateRows: "repeat(" + props.grid.rows + ", var(--cell-size))"
+                    };
+                });
+                const cellsStyle = computed(function () {
+                    return {
+                        gridTemplateColumns: "repeat(" + props.grid.cols + ", var(--cell-size))"
+                    };
+                });
+                const bodyStyle = computed(function () {
+                    return {
+                        gridTemplateColumns: "var(--idx-w) auto",
+                        gridTemplateRows: "var(--idx-h) auto"
+                    };
                 });
 
+                function startDimEdit() {
+                    dimRows.value = props.grid.rows;
+                    dimCols.value = props.grid.cols;
+                    editingDims.value = true;
+                    nextTick(function () { if (dimInput.value) dimInput.value.focus(); });
+                }
+                function commitDims() {
+                    if (!editingDims.value) return;
+                    let r = parseInt(dimRows.value, 10);
+                    let c = parseInt(dimCols.value, 10);
+                    if (isNaN(r) || r < 1) r = 1;
+                    if (isNaN(c) || c < 1) c = 1;
+                    if (r > 30) r = 30;
+                    if (c > 30) c = 30;
+                    applyDims(r, c);
+                    editingDims.value = false;
+                }
+                function cancelDims() { editingDims.value = false; }
+                function applyDims(rows, cols) {
+                    const old = props.grid.cells;
+                    const next = [];
+                    for (let r = 0; r < rows; r++) {
+                        const row = [];
+                        for (let c = 0; c < cols; c++) {
+                            const prev = old[r] && old[r][c];
+                            row.push(prev != null ? prev : "");
+                        }
+                        next.push(row);
+                    }
+                    props.grid.cells = next;
+                    props.grid.rows = rows;
+                    props.grid.cols = cols;
+                }
+                function resetGrid() {
+                    for (let r = 0; r < props.grid.rows; r++) {
+                        for (let c = 0; c < props.grid.cols; c++) {
+                            props.grid.cells[r][c] = "";
+                        }
+                    }
+                }
+                function remove() { emit("remove"); }
+                function copy() { emit("copy"); }
+                function onCellInput(r, c, e) {
+                    props.grid.cells[r][c] = e.target.value;
+                }
+                function onCellKey(e) {
+                    if (e.key === "Enter") e.target.blur();
+                }
+
+                return {
+                    editingDims: editingDims, dimRows: dimRows, dimCols: dimCols, dimInput: dimInput,
+                    colIdxStyle: colIdxStyle, rowIdxStyle: rowIdxStyle, cellsStyle: cellsStyle, bodyStyle: bodyStyle,
+                    startDimEdit: startDimEdit, commitDims: commitDims,
+                    cancelDims: cancelDims, resetGrid: resetGrid, remove: remove, copy: copy,
+                    onCellInput: onCellInput, onCellKey: onCellKey
+                };
+            },
+            template:
+                '<div class="grid-wrap">' +
+                '<div class="grid-body" v-bind:style="bodyStyle">' +
+                '<div class="corner"></div>' +
+                '<div class="idx-row-top" v-bind:style="colIdxStyle">' +
+                '<div class="idx" v-for="c in grid.cols" v-bind:key="\'ci-\' + c">{{ c - 1 }}</div>' +
+                '</div>' +
+                '<div class="idx-col-left" v-bind:style="rowIdxStyle">' +
+                '<div class="idx" v-for="r in grid.rows" v-bind:key="\'ri-\' + r">{{ r - 1 }}</div>' +
+                '</div>' +
+                '<div class="cells" v-bind:style="cellsStyle">' +
+                '<template v-for="r in grid.rows" v-bind:key="\'rr-\' + r">' +
+                '<input v-for="c in grid.cols" v-bind:key="\'c-\' + r + \'-\' + c" class="grid-cell" type="text" ' +
+                'v-bind:value="grid.cells[r-1][c-1]" ' +
+                'v-on:input="onCellInput(r-1, c-1, $event)" ' +
+                'v-on:keyup="onCellKey">' +
+                '</template>' +
+                '</div>' +
+                '</div>' +
+                '<div class="grid-controls">' +
+                '<template v-if="!editingDims">' +
+                '<button v-on:click="resetGrid">Reset</button>' +
+                '<button v-on:click="copy" title="Duplicate this grid">Copy</button>' +
+                '<button v-on:click="startDimEdit" title="Change size">{{ grid.rows }} x {{ grid.cols }}</button>' +
+                '<button class="danger" v-on:click="remove" title="Delete grid">Delete</button>' +
+                '</template>' +
+                '<template v-if="editingDims">' +
+                '<div class="dim-editor">' +
+                '<input ref="dimInput" type="number" min="1" max="30" v-model="dimRows" v-on:keyup.enter="commitDims" v-on:keyup.esc="cancelDims" v-on:blur="commitDims">' +
+                '<span>x</span>' +
+                '<input type="number" min="1" max="30" v-model="dimCols" v-on:keyup.enter="commitDims" v-on:keyup.esc="cancelDims" v-on:blur="commitDims">' +
+                '</div>' +
+                '</template>' +
+                '</div>' +
+                '</div>'
+        };
+
+        /* ===================== App ===================== */
+        const app = createApp({
+            components: { TreeNode: TreeNode, GridPanel: GridPanel },
+            setup() {
+                const state = reactive({ workspaces: [] });
+                let nextWsUid = 1;
+                let nextGridUid = 1;
+
+                function makeTreeWorkspace() {
+                    return {
+                        uid: nextWsUid++,
+                        type: "tree",
+                        treeKey: 0,
+                        nextId: 2,
+                        root: { id: 1, value: null, children: [], autoEdit: true }
+                    };
+                }
+
+                function makeGrid(rows, cols) {
+                    const cells = [];
+                    for (let r = 0; r < rows; r++) {
+                        const row = [];
+                        for (let c = 0; c < cols; c++) row.push("");
+                        cells.push(row);
+                    }
+                    return { uid: nextGridUid++, rows: rows, cols: cols, cells: cells };
+                }
+
+                function makeGridWorkspace() {
+                    return {
+                        uid: nextWsUid++,
+                        type: "grid",
+                        grids: [],
+                        m: 3,
+                        n: 3
+                    };
+                }
+
+                function addTreeWorkspace() { state.workspaces.push(makeTreeWorkspace()); }
+                function addGridWorkspace() { state.workspaces.push(makeGridWorkspace()); }
+
+                function deleteWorkspace(ws) {
+                    const i = state.workspaces.indexOf(ws);
+                    if (i !== -1) state.workspaces.splice(i, 1);
+                }
+
+                function createGrid(ws) {
+                    let m = parseInt(ws.m, 10);
+                    let n = parseInt(ws.n, 10);
+                    if (isNaN(m) || m < 1) m = 1;
+                    if (isNaN(n) || n < 1) n = 1;
+                    if (m > 30) m = 30;
+                    if (n > 30) n = 30;
+                    ws.grids.push(makeGrid(m, n));
+                }
+                function removeGrid(ws, grid) {
+                    const i = ws.grids.indexOf(grid);
+                    if (i !== -1) ws.grids.splice(i, 1);
+                }
+                /* Per-grid copy: clone one grid, append to the END of the workspace's grid list */
+                function copyGrid(ws, grid) {
+                    const cells = [];
+                    for (let r = 0; r < grid.rows; r++) {
+                        const row = [];
+                        for (let c = 0; c < grid.cols; c++) row.push(grid.cells[r][c]);
+                        cells.push(row);
+                    }
+                    const clone = {
+                        uid: nextGridUid++,
+                        rows: grid.rows,
+                        cols: grid.cols,
+                        cells: cells
+                    };
+                    ws.grids.push(clone);
+                }
+                /* Workspace copy: clone every grid inside, append to the END of the page */
+                function copyGridWorkspace(ws) {
+                    const clonedGrids = ws.grids.map(function (g) {
+                        const cells = [];
+                        for (let r = 0; r < g.rows; r++) {
+                            const row = [];
+                            for (let c = 0; c < g.cols; c++) row.push(g.cells[r][c]);
+                            cells.push(row);
+                        }
+                        return { uid: nextGridUid++, rows: g.rows, cols: g.cols, cells: cells };
+                    });
+                    const clone = {
+                        uid: nextWsUid++,
+                        type: "grid",
+                        grids: clonedGrids,
+                        m: ws.m,
+                        n: ws.n
+                    };
+                    state.workspaces.push(clone);
+                }
+
                 function findNode(node, id) {
+                    if (!node) return null;
                     if (node.id === id) return node;
-                    for (const c of node.children) {
-                        const f = findNode(c, id);
+                    for (let i = 0; i < node.children.length; i++) {
+                        const f = findNode(node.children[i], id);
                         if (f) return f;
                     }
                     return null;
                 }
 
-                function addChild(parentId) {
-                    const parent = findNode(state.root, parentId);
+                function addChild(ws, parentId) {
+                    const parent = findNode(ws.root, parentId);
                     if (!parent) return;
                     parent.children.push({
-                        id: nextId++,
+                        id: ws.nextId++,
                         value: null,
                         children: [],
                         edgeLabel: null,
@@ -609,24 +1062,75 @@
                     });
                 }
 
-                function removeNode(id) {
-                    const detach = (node) => {
-                        const i = node.children.findIndex(c => c.id === id);
+                function removeNode(ws, id) {
+                    if (!ws.root) return;
+                    function detach(node) {
+                        const i = node.children.findIndex(function (c) { return c.id === id; });
                         if (i !== -1) { node.children.splice(i, 1); return true; }
-                        return node.children.some(detach);
+                        for (let j = 0; j < node.children.length; j++) {
+                            if (detach(node.children[j])) return true;
+                        }
+                        return false;
+                    }
+                    detach(ws.root);
+                }
+
+                function resetTree(ws) {
+                    if (!ws.root) return;
+                    function clear(node) {
+                        node.value = null;
+                        node.edgeLabel = null;
+                        node.edgeSide = null;
+                        node.autoEdit = false;
+                        for (let i = 0; i < node.children.length; i++) clear(node.children[i]);
+                    }
+                    clear(ws.root);
+                    ws.root.autoEdit = true;
+                }
+
+                /* Tree workspace copy: append to the END of the page */
+                function copyTree(ws) {
+                    if (!ws.root) return;
+                    let counter = 2;
+                    function cloneNode(n, isRoot) {
+                        return {
+                            id: isRoot ? 1 : counter++,
+                            value: n.value,
+                            children: n.children.map(function (c) { return cloneNode(c, false); }),
+                            edgeLabel: n.edgeLabel,
+                            edgeSide: n.edgeSide,
+                            autoEdit: false
+                        };
+                    }
+                    const clone = {
+                        uid: nextWsUid++,
+                        type: "tree",
+                        treeKey: 0,
+                        nextId: counter,
+                        root: cloneNode(ws.root, true)
                     };
-                    detach(state.root);
+                    state.workspaces.push(clone);
                 }
 
-                function reset() {
-                    nextId = 2;
-                    state.root = { id: 1, value: null, children: [], autoEdit: true };
-                }
-
-                return { state, addChild, removeNode, reset };
+                return {
+                    state: state,
+                    addTreeWorkspace: addTreeWorkspace,
+                    addGridWorkspace: addGridWorkspace,
+                    deleteWorkspace: deleteWorkspace,
+                    createGrid: createGrid,
+                    removeGrid: removeGrid,
+                    copyGrid: copyGrid,
+                    copyGridWorkspace: copyGridWorkspace,
+                    addChild: addChild,
+                    removeNode: removeNode,
+                    resetTree: resetTree,
+                    copyTree: copyTree
+                };
             }
         });
 
+        app.component("tree-node", TreeNode);
+        app.component("grid-panel", GridPanel);
         app.mount("#app");
     </script>
 </body>
